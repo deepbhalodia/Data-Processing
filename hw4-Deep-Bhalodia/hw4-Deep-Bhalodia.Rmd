@@ -1,0 +1,188 @@
+---
+title: "hw4-Deep-Bhalodia"
+author: "Deep Bhalodia"
+date: "2/21/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+### Loading of required packages
+```{r, warning=FALSE,message= FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(rlang)
+library(readr)
+library(tidyverse)
+```
+
+### Part A
+
+```{r}
+crdc<-read_csv("/Users/deep/downloads/CRDC 2015-16 School Data.csv", guess_max = 15000, na=c("-2", "-5", "-6", "-7", "-8", "-9"))
+
+echo = FALSE
+
+crdc
+```
+
+### Problem 1
+
+```{r}
+crdc_race <- crdc %>%select(SCH_NAME, SCH_ENR_HI_M:SCH_ENR_TR_F) %>%
+  gather(key=racegender, value=enrollment,
+  SCH_ENR_HI_M:SCH_ENR_TR_F) %>%
+  separate(racegender, into=c("race", "gender"),sep=-1) %>%
+  mutate(race=recode(race,SCH_ENR_HI_="Hispanic",SCH_ENR_AM_="American Indian/Alaska Native",
+  SCH_ENR_AS_="Asian",SCH_ENR_HP_="Native Hawaiian/Pacific Islander",SCH_ENR_BL_="Black",
+  SCH_ENR_WH_="White",SCH_ENR_TR_="Two or More Races")) %>%
+  group_by(SCH_NAME, race) %>%
+  summarize(enrollment = sum(enrollment, na.rm=TRUE)) %>%
+  left_join(select(crdc, SCH_NAME, TOT_ENR_M, TOT_ENR_F)) %>%
+  mutate(prop = enrollment / (TOT_ENR_M + TOT_ENR_F)) %>%
+  filter(prop <= 1)
+
+
+crdc_race %>%ggplot() +
+  geom_boxplot(aes(x=race, y=prop)) +
+  coord_flip()
+```
+
+### Problem 2
+
+### For each school, calculate the proportions of students of each race enrolled in a Calculus class (among students enrolled in calculus classes at each school). (It may be helpful to filter out schools without data for Calculus class enrollment.) Then create side-by-side boxplots showing the distributions of these proportions for each race.
+
+```{r}
+
+crdc_calc <- crdc %>%filter(!is.na(TOT_MATHENR_CALC_M), !is.na(TOT_MATHENR_CALC_F)) %>%
+  select(SCH_NAME, SCH_MATHENR_CALC_HI_M:SCH_MATHENR_CALC_TR_F) %>%
+  gather(key=racegender, value=calc_enrollment,SCH_MATHENR_CALC_HI_M:SCH_MATHENR_CALC_TR_F) %>%
+  separate(racegender, into=c("race", "gender"),sep=-1) %>%
+  mutate(race=recode(race,SCH_MATHENR_CALC_HI_="Hispanic",SCH_MATHENR_CALC_AM_="American Indian/Alaska Native",SCH_MATHENR_CALC_AS_="Asian",SCH_MATHENR_CALC_HP_="Native Hawaiian/Pacific Islander",SCH_MATHENR_CALC_BL_="Black",SCH_MATHENR_CALC_WH_="White",SCH_MATHENR_CALC_TR_="Two or More Races")) %>%
+  group_by(SCH_NAME, race) %>%
+  summarize(calc_enrollment = sum(calc_enrollment, na.rm=TRUE)) %>%
+  left_join(select(crdc, SCH_NAME, TOT_MATHENR_CALC_M, TOT_MATHENR_CALC_F)) %>%
+  mutate(prop = calc_enrollment / (TOT_MATHENR_CALC_M + TOT_MATHENR_CALC_F)) %>%
+  filter(prop <= 1)
+
+
+crdc_calc %>%ggplot() +
+  geom_boxplot(aes(x=race, y=prop)) +
+  coord_flip()
+
+
+```
+
+### Comments
+
+The relative proportions of Hispanic, Black, and multiracial students drop dramatically in the bar plot for Calculus enrollment, while the relative proportions of White and Asian students increases between the two plots.
+
+There are two few American Indian / Alaska Native and Native Hawaiian / Pacific Islander students to be able to discern changes in those sub-populations from this plot alone
+
+### PART B
+
+```{r}
+load(file = "31721-0001-Data.rda")
+
+this <- as_tibble(da31721.0001) %>%
+  transmute(id=RESPKEY,
+  gender=Q6,
+  asab=Q5,
+  race_black=D9_1,
+  race_white=D9_2,
+  race_latinx=D9_3,
+  race_native=D9_4,
+  homeless_ever=Q88,
+  fam_support=Q119,
+  suicide_thoughts=Q131,
+  suicide_attempt=Q133)
+
+```
+
+### Problem 3
+
+### Transform the data to include only 3 gender categories for trans men, trans women, and non-binary participants. 
+
+```{r}
+this_recode <- this %>%mutate(gender = recode(gender,`(1) Man` = "Man",`(2) Woman` =  "Woman",`(4) Androgynous` = "Non-binary",`(6) Gender Queer` = "Non-binary")) %>%
+  filter((gender == "Woman" & asab == "(1) Male") |(gender == "Man" & asab == "(2) Female") |gender == "Non-binary")
+
+ggplot(this_recode) + geom_bar(aes(x=gender))
+
+```
+
+```{r}
+this_recode %>%
+  filter(!is.na(homeless_ever)) %>%
+  ggplot() +
+  geom_bar(aes(x=homeless_ever,y=..prop..,group=1)) +
+  facet_wrap(~gender)
+```
+### Comments
+
+Trans women, trans men, and non-binary people in this survey have all experienced homelessness at a greater lifetime rate than the U.S. general population.
+
+
+### Problem 4
+
+###  Using the full dataset again, transform the dataset to have a column for race indicating the race of the participant.
+
+```{r}
+this %>%
+  gather(key = race,value = race_selected,race_black:race_native) %>%
+  filter(race_selected == "(1) Selected") %>%
+  select(-race_selected) %>%
+  mutate(race = recode(race,race_black = "African American",race_white = "Caucasian",race_latinx = "Hispanic / Latinx",race_native = "Native American")) %>%
+  filter(!is.na(homeless_ever)) %>%
+  ggplot() +
+  geom_bar(aes(x=homeless_ever, y=..prop.., group=race)) +
+  facet_grid(~race)
+      
+```
+### Comments
+Note that some participants identify as multiple races, so they may appear in multiple facets of the above bar plots (but only once per subplot).
+
+Participants of all races in this survey have experienced homelessness at a greater lifetime rate than the U.S. general population.
+
+
+### Problem 5
+
+### Using the full dataset, calculate the total proportion of participants who have attempted suicide in the Virginia THIS survey.
+```{r}
+this %>%
+summarise(suicide=sum(suicide_attempt == "(1) Yes", na.rm=TRUE) / n())
+
+
+```
+### Comments
+
+25.4% of the trans participants in this survey sample have attempted suicide, which is lower than the national average for trans people.
+
+### We would like to know if having a birth family who is supportive of one’s gender identity and expression reduces the risk of suicide. 
+
+```{r}
+this %>%
+  filter(!is.na(suicide_thoughts),!is.na(fam_support),
+         fam_support != "(5) Not applicable to me") %>%
+  ggplot() +
+  geom_bar(aes(x=suicide_thoughts,y=..prop..,group=1)) +facet_grid(~fam_support)
+```
+
+### Comments
+
+We notice that a smaller proportion of participants with supportive families have had suicidal thoughts,indicating a trend between increased familial support and reduced suicidal thoughts. This suggests that having a supportive family can greatly decrease the risk of suicide among trans people.

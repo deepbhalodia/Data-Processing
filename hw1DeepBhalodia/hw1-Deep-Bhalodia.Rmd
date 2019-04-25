@@ -1,0 +1,117 @@
+---
+title: "hw1-Deep-Bhalodia"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Loading required packages
+```{r,message= FALSE, warning= FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(rlang)
+
+```
+
+### Prob-1
+
+### Function to subset a dataset in columns 
+```{r}
+selectCols <- function(data, ...) {
+cols <- list(...)
+# convert indices to column names
+cols <- lapply(cols, function(var) {
+  if ( is.numeric(var) ) {
+    names(data)[var]
+    }
+  else {
+    var
+    }
+  })
+
+cols <- unlist(cols) # unlist the list into a character vector
+cols <- unique(cols) # unique() removes repeated columns; optional
+data[,cols,drop=FALSE]
+}
+
+selectCols(mpg, "model", "year")
+selectCols(mpg, 1, 2:3)
+selectCols(mpg, 2, "cty", "hwy")
+```
+
+
+### Part A - Problem 2
+
+### Write a function of the following form: plotCols(data) 
+
+```{r}
+plotCols <- function(data) {
+  for ( var in names(data) ) {
+    if ( is.numeric(data[[var]]) ) {
+      print(ggplot(data, aes_string(x=var)) + geom_histogram())
+      } 
+    else {
+      print(ggplot(data, aes_string(x=var)) + geom_bar())
+    }
+  }
+}
+
+plotCols(mpg)
+
+```
+
+### Part B - Problem 3
+
+```{r}
+
+#boxplot
+ggplot(diamonds, aes(x=color, y=price)) + geom_boxplot()
+
+```
+
+
+### Comments: 
+The best color is “D” and the worst color is “J”, so the worse color diamonds appear to have higher prices on
+average. This doesn’t make sense, as we would expect that better color diamonds should have higher prices.
+
+### Part B - Problem 4
+
+### Use side-by-side boxplots to visualize the distribution of carat for each level of color. What do you notice about the relationship between carat and color? Could this help make sense of the previous plot?
+```{r}
+
+#boxplot
+ggplot(diamonds , aes(x=color, y=carat)) + ylab("Carat") + xlab("Colour") + ggtitle("Boxplot of Carats against each level of Colour") + geom_boxplot() 
+
+```
+
+### Comments: 
+This plot shows that worse color diamonds tend to have larger carat sizes than better color diamonds. If
+worse color diamonds are larger on average (and we would expect that larger diamonds are more expensive),
+then it may help explain why worse color diamonds tend to have a higher average price.
+
+
+### Part B - Problem #5
+
+### Create a scatter plot of carat versus price, using either an additional aesthetic or faceting to visualize the relationship between carat and price for each level of color. Overlay smooth lines for each level of color. Comment on what you notice about the relationship between carat, price, and color.
+
+```{r}
+
+ggplot(diamonds, aes(x=carat, y=price, color=color)) +
+geom_point() + geom_smooth()
+
+#Scatter plot
+ggplot(diamonds, aes(x=carat, y=price)) +
+geom_point() + geom_smooth() + facet_wrap(~color)
+
+```
+
+### Comments:
+
+These plots show a positive relationship between carat and price. Larger diamonds demand higher prices. In
+addition, the colors (or facets) show that among diamonds of similar size, the better color diamonds tend to
+be more expensive. However, worse color diamonds tend to be larger, as shown by the separate fitted lines.

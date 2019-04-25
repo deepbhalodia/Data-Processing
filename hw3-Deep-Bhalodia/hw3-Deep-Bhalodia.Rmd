@@ -1,0 +1,277 @@
+---
+title: "hw3-Deep-Bhalodia"
+author: "Deep Bhalodia"
+date: "2/5/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+### Loading required packages
+
+```{r, message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(rlang)
+library(readr)
+library(tidyr)
+library(lubridate)
+library(dbConnect)
+library(dbplyr)
+library(RMySQL)
+library(DBI)
+
+```
+### Part A
+
+### Problem 1
+
+### Find a dataset that is personally interesting to you
+
+The dataset that is used for this problem can be founded on kaggle. The dataset belongs to e-commerce which contains information of actual transactions from UK retailer. It can be found here https://www.kaggle.com/carrie1/ecommerce-data/home
+
+### Import the dataset into R, put it into a tidy format, and print the first ten observations of the dataset.
+
+```{r, warning=FALSE, message=FALSE}
+data<-read_csv("data.csv")
+```
+
+```{r}
+glimpse(data)
+```
+
+```{r}
+sum(is.na(data))
+```
+
+```{r}
+summary(data)
+```
+
+### Comments
+
+As seen from the summary statistics above there are NA values in column Customer ID. Also, the minimum value of quantity is negative which is not possible. We will deal with these in the following steps 
+
+### In the next step we assign NA to columns Quantity and UnitPrice. As seen in the previous step there are negative values assigned to those column observations. Here we assign NA to all the negative values
+
+```{r}
+data <- data %>% 
+  mutate(Quantity = replace(Quantity, Quantity<=0, NA),
+         UnitPrice = replace(UnitPrice, UnitPrice<=0, NA))
+
+```
+
+### Here we drop all the rows containing NA values as discussed in the above steps
+```{r}
+data <- data %>%
+  drop_na()
+```
+
+### Print first ten observations of the dataset
+```{r}
+data[1:10,]
+```
+
+### InvoiceDate variable contains information about date and the time customer ordered something. Lets examine this variable in more detail
+
+```{r}
+data$InvoiceDate[1:10]
+```
+
+### The dates are in month/day/year hour:minute. At this point the variable InvoiceDate is a factor variable. This should be transformed into a datetime variable. To do so I have usee lubridate package. 
+
+```{r}
+# making two variables InvoiceDate and InvoiceTime
+data <- separate(data, InvoiceDate, c("InvoiceDate", "InvoiceTime"), sep=" ", remove= TRUE) 
+data$InvoiceDate <- mdy(data$InvoiceDate) #make datetime object
+data$InvoiceTime <- hm(data$InvoiceTime) # make datetime objects
+head(data)
+```
+
+```{r}
+data$InvoiceYear <- year(data$InvoiceDate)
+data$InvoiceMonth <- month(data$InvoiceDate,label=T)
+data$InvoiceWeekday <- wday(data$InvoiceDate, label=T)
+data$InvoiceHour <- hour(data$InvoiceTime)
+```
+
+### Perform exploratory data analysis on the dataset, using the techniques learned in class. Calculate summary statistics that are of interest to you and create plots using ggplot2 that show your findings.
+
+```{r}
+data %>%
+  group_by(Country) %>%                              # calculate the counts
+  summarize(counts = n()) %>%
+  arrange(counts) %>%                                # sort by counts
+  mutate(Country = factor(Country, Country)) %>%     # reset factor
+  ggplot(aes(x=Country, y=counts)) +                 # plot 
+    geom_bar(stat="identity") +                      # plot histogram
+    coord_flip()   
+```
+```{r}
+data <- data %>% mutate(lineTotal = Quantity * UnitPrice)
+```
+
+
+```{r}
+data$InvoiceYear<-as.factor(data$InvoiceYear)
+data$InvoiceMonth<-as.factor(data$InvoiceMonth)
+data$InvoiceWeekday<-as.factor(data$InvoiceWeekday)
+data$InvoiceHour<-as.factor(data$InvoiceHour)
+data$Country<-as.factor(data$Country)
+```
+
+```{r}
+options(repr.plot.width=8, repr.plot.height=3)
+data %>%
+  group_by(InvoiceDate) %>%
+  summarise(Revenue = sum(lineTotal)) %>%
+  ggplot(aes(x = InvoiceDate, y = Revenue)) + geom_line() + geom_smooth(method = 'auto', se = FALSE) + labs(x = 'Date', y = 'Revenue (£)', title = 'Revenue by Date')
+
+```
+
+```{r}
+data %>%
+  group_by(InvoiceWeekday) %>%
+  summarise(revenue = sum(lineTotal)) %>%
+  ggplot(aes(x = InvoiceWeekday, y = revenue)) + geom_col() + labs(x = 'Day of Week', y = 'Revenue (£)', title = 'Revenue by Day of Week') 
+```
+
+```{r}
+data %>%
+  group_by(InvoiceHour) %>%
+  summarise(revenue = sum(lineTotal)) %>%
+  ggplot(aes(x = InvoiceHour, y = revenue)) + geom_col() + labs(x = 'Hour Of Day', y = 'Revenue (£)', title = 'Revenue by Hour Of Day')
+```
+
+```{r}
+data %>%
+  group_by(InvoiceHour) %>%
+  summarise(transactions = n_distinct(InvoiceNo)) %>%
+  ggplot(aes(x = InvoiceHour, y = transactions)) + geom_col() + labs(x = 'Hour Of Day', y = 'Number of Transactions', title = 'Transactions by Hour Of Day')
+```
+
+
+### Part B
+
+### Connecting with the MySql database
+
+```{r}
+##Before reading data you should first create tables and load data in database. Then connect to the same database using this code
+con <- dbConnect(MySQL(), user="root", password="deep10", host="localhost", port=3306, dbname="DMDP")  
+
+dbListTables(con)
+```
+
+
+### Problem 3
+
+### Filter the data to include only the authors for whom a gender was predicted as ‘male’ or ‘female’ with a probability of 0.95 or greater, and then create a bar plot showing the total number of distinct male and female authors published each year. Comment on the visualization.
+
+```{r}
+
+general <- tbl(con, "general")
+
+authors <- tbl(con, "authors")
+```
+
+```{r}
+authors %>%
+  left_join(general) %>%
+  select(year, gender, prob, name, k) %>%
+  collect() %>%
+  filter(prob >= 0.95) %>%
+  filter(gender %in% c('M', 'F')) %>%
+  ggplot() +
+  geom_bar(aes(x=year, fill = gender))
+```
+### Comments
+
+Each row in the “authors” dataset corresponds to a single author on a single paper. Therefore, authors who have published more than one paper appear multiple times in the dataset. We use n_distinct() to count the number of distinct authors.
+
+The total number of CS papers published each year is increasing over time. We also notice that the vast majority of authors publishing in computer science journals and proceedings each year are male.
+
+### Problem 4
+
+### Still including only the authors for whom a gender was predicted with a probability of 0.95 or greater, create a stacked bar plot showing the proportions of distinct male authors vs. distinct female authors published each year. (The stacked bars for each year will sum to one.) Comment on the visualization.
+
+
+```{r}
+author_year <- authors %>% 
+  left_join(general) %>% 
+  select(k, year, name, gender, prob) %>% 
+  collect() %>% 
+  filter(gender %in% c('M', 'F')) %>%
+  filter(prob >= 0.95) %>% 
+  group_by(year) %>% 
+  summarise(total = n_distinct(name))
+
+
+general_author_year <- authors %>% 
+  left_join(general) %>% 
+  select(k, year, name, gender, prob) %>% 
+  collect() %>% 
+  filter(gender %in% c('M', 'F')) %>%
+  filter(prob >= 0.95) %>% 
+  group_by(gender, year) %>% 
+  summarise(general_author_count = n_distinct(name))
+
+
+left_join(general_author_year, author_year) %>% 
+  select(year, total, gender, general_author_count) %>%
+  mutate(genprop = general_author_count / total) %>% 
+  ggplot() + 
+  geom_col(aes(x=year, y=genprop, fill=gender))
+
+```
+
+### Comments
+
+Because authors appear multiple times in the dataset, we calculate the year-by-year counts separetely, and then join the summaries with left_join() to plot the proportions. We see that there is a general trend of the proportion of women authors increasing over the years, but there is still a long way to go.
+
+### Problem 5
+
+### Still including only the authors for whom a gender was predicted with a probability of 0.95 or greater, create a bar plot showing the count of papers published with (1) male first authors and (2) female first authors. Then create a bar plot showing the count of papers published with (1) no female authors and (2) at least 1 female author. Comment on any similarities and differences between the two bar plots.
+
+```{r}
+#Part-1
+authors %>%filter(gender == 'M' | gender == 'F', prob >= 0.90) %>%
+  filter(pos == 0) %>%
+  collect() %>%
+  group_by(gender) %>%
+  ggplot() +
+  geom_bar(aes(x=gender)) +
+  labs(x="gender of first author")
+```
+
+```{r}
+#Part-2
+authors %>%filter(gender == 'M' | gender == 'F', prob >= 0.95) %>%
+  collect() %>%
+  group_by(k) %>%
+  summarise(AnyF = "F" %in% gender) %>%
+  mutate(AnyF = factor(AnyF, levels = c("TRUE", "FALSE"),
+  labels = c("Yes", "No"))) %>%
+  ggplot() +
+  geom_bar(aes(x=AnyF)) +
+  labs(x="at least 1 female author")
+
+```
+### Comments
+
+The first plot shows there are far fewer CS papers published with female first authors than male first authors.
+
+The second plots shows that – although there are still fewer papers published with any female authors than without female authors – the difference is less than before.
+
+This suggests there are more women publishing CS papers as co-authors than first authorships alone would suggest.

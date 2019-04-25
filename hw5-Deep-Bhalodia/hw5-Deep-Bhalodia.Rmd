@@ -1,0 +1,175 @@
+---
+title: "hw5-Deep-Bhalodia"
+author: "Deep Bhalodia"
+date: "3/16/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+### Loading required packages
+```{r, warning=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(rlang)
+library(readr)
+library(corrplot)
+library(mlbench)
+library(modelr)
+library(tidyverse)
+
+eval = FALSE
+```
+
+### Part A
+
+### Problem 1
+
+### Choose one of the “miniposters” created by your fellow classmates and posted on Piazza for Homework 3. Cite both the name of the student whose miniposter you chose and the original source of the dataset used in that miniposter. Download and import that dataset into R, put it into a tidy format (if necessary), and print the first ten observations of the dataset.
+
+### Miniposter Used
+
+### Name - Harsh Shah
+### Source - https://www.kaggle.com/uciml/breast-cancer-wisconsin-data
+
+```{r}
+
+dataset <- read_csv("Cancer.csv")
+
+
+colSums(is.na(dataset))
+
+
+dataset <- dataset[,-33]
+
+
+dataset[1:10,]
+
+
+summary(dataset)
+
+table(dataset$diagnosis)
+dataset$diagnosis <- factor(dataset$diagnosis, levels = c("B", "M"), labels = c("Benign", "Malignant"))
+
+
+summary(dataset$radius_mean)
+summary(dataset$area_mean)
+
+
+# The data looks clean now therefore there is no need to further clean the data. We will use this data to create the plots created by harsh in his mini-poster.
+```
+### Problem 2
+
+### To the best of your ability, reproduce the figures from the miniposter you chose. You may contact the author of the original miniposter; if you do, cite and describe any information you receive from them. (If you are contacted for information on reproducing figures from your own miniposter, you may provide it, but you are not obligated respond.)
+
+
+```{r}
+
+#The two figures from the miniposter are reproduced below:
+
+ggplot(dataset) + geom_bar(aes(x=diagnosis,fill= diagnosis))
+
+
+dataset_new <- dataset
+dataset_new <- dataset_new[, -c(1:2)]
+
+correlation_plot <- cor(dataset_new)
+
+corrplot(correlation_plot, order = "hclust", tl.cex=0.8, addrect = 10)
+
+
+# We have successfully created both the plots harsh created in his miniposer
+```
+### Part B
+
+### Problem 3
+### Fit a model that predicts per capita crime rate by town (crim) using only one predictor variable. Use plots to justify your choice of predictor variable and the appropriateness of any transformations you use. Print the values of the fitted model parameters.
+```{r}
+
+data(BostonHousing)
+
+ggplot(BostonHousing, aes(x=dis, y=crim)) + geom_point()
+
+```
+
+### Comment
+
+From the scatterplot, there appears to be a negative association between dis and crim, but it’s not linear
+
+```{r}
+
+ggplot(BostonHousing, aes(x=dis, y=log(crim))) + geom_point()
+
+```
+
+### Comment
+Log transforming crim improves the relationship, but the relationship is still not quite linear
+
+```{r}
+ggplot(BostonHousing, aes(x=log(dis), y=log(crim))) + geom_point()
+```
+
+### Comment
+Log transforming dis as well improves the relationship, making it much more linear. We will include dis as the predictor variable in our model.
+
+```{r}
+fit1 <- lm(log(crim) ~ log(dis), data=BostonHousing)
+summary(fit1)
+```
+
+
+### Problem 4
+
+### Plot the residuals of the fitted model from Problem 3 against the predictor variable already in the model and against other potential predictor variables in the dataset. Comment on what you observe in each residual plot. 
+
+```{r}
+BostonHousing %>%
+  add_residuals(fit1, "lresid") %>%
+  ggplot(aes(x=log(dis), y=lresid)) +
+  geom_point()
+```
+
+### Comment
+In the residual plot for log(dis), we mostly see simple random scatter and no systematic patterns, indicating no violation of model assumptions.
+
+```{r}
+BostonHousing %>%
+  add_residuals(fit1, "lresid") %>%
+  ggplot(aes(x=rad, y=lresid)) +
+  geom_point()
+
+```
+
+### Comment
+In the residual plot for rad, we see a positive linear relationship between the log residuals and rad, indicating that there is a relationship between rad and log(crim), so we should add rad as a predictor in the model.
+  
+### Problem 5
+
+### Fit a new model for predicting per capita crime rate by town, adding or removing variables based on the residual plots from Problem 4. Interpret the model.
+
+```{r}
+
+fit2 <- lm(log(crim) ~ log(dis) + rad, data=BostonHousing)
+summary(fit2)
+
+RMSE <- function(error) { sqrt(mean(error^2)) }
+
+RMSE(fit2$residuals)
+
+
+```
+
+### Comments
+It appears that crime has a negative relationship with distance from employment centers. Larger distances result in lower crime rates.
+Conversely, there is a positive relationship between crime and the index of accessibility to radial highways. Higher indices are associated with higher crime rates.
+```

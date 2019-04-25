@@ -1,0 +1,276 @@
+---
+title: "hw2-Deep-Bhalodia"
+author: "Deep Bhalodia"
+date: "1/27/2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Loading required packages
+```{r, message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(rlang)
+library(readr)
+library(forcats)
+library(measurements)
+
+```
+
+### R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+### Part A
+
+```{r, message=FALSE, warning=FALSE}
+water_raw<-read_csv("NavajoWaterExport.csv")
+```
+
+```{r}
+water <- transmute(water_raw,
+  section=`Which EPA Section is This From?`,
+  name=`Name of Water Source`,
+  date=`Date of Water Sampling`,
+  long=Longitude,
+  lat=Latitude,
+  risk=`US EPA Risk Rating`,
+  radium228=`Amount of Radium228`)
+
+water
+
+```
+
+### Problem 1
+
+### Mutate the dataset to replace negative values of Radium-228 with 0
+### Filter the mutated dataset to remove any sites with "Unknown Risk" in EPA risk rating
+
+```{r}
+water2 <- mutate(water, radium228=ifelse(radium228 < 0, 0, radium228)) %>%
+  filter(risk != "Unknown Risk") %>%
+  mutate(risk=fct_relevel(risk, "More Risk", "Some Risk", "Less Risk"))
+
+```
+
+## Visualize the distribution of Radium-228 with each EPA section and each risk level
+
+```{r}
+ggplot(water2) +
+  geom_boxplot(aes(x=risk, y=radium228)) +
+  facet_wrap(~section) +
+  coord_flip()
+```
+
+### Observations
+
+We choose to use side-by-side boxplots and faceting to visualize the distribution of Radium-228. We could also use histograms, but they may be somewhat more difficult to interpret in this case.
+
+We notice that Section 3 and 4 tend to have the most sites with high concentrations of Radium-228. In general sites with higher EPA Risk are associated with higher levels of Radium-228, but this does not always seem to be the case, suggesting other radioactive isotopes contribute to EPA Risk as well.
+### Problem 2
+
+### Get data for drawing the “Four Corners” region of the United States
+
+```{r}
+water_map <- water2 %>%mutate(long=-as.numeric(conv_unit(long,from="deg_min_sec",                           to="dec_deg")),lat=as.numeric(conv_unit(lat,from="deg_min_sec",to="dec_deg")))
+
+four_corners <- map_data("state",region=c("arizona", "new mexico","utah", "colorado"))
+```
+
+### Create a map of the region showing the locations of the water sampling sites, along with the EPA risk and the concentration of Radium-228 for each location
+
+```{r}
+
+ggplot(water_map) +geom_polygon(mapping=aes(x=long, y=lat, group=group),
+                                data=four_corners,fill=NA, color="black") +
+  geom_point(mapping=aes(x=long, y=lat,color=risk,size=radium228),alpha=2/3) +
+  scale_color_manual(values=c("red", "orange", "yellow3")) +
+  coord_map(xlim=c(-112, -108.5), ylim=c(35, 37.5))
+                                
+```
+
+### Part B
+
+```{r}
+crdc <- read_csv("/Users/deep/downloads/CRDC 2015-16 School Data.csv",
+na=c("-2", "-5", "-6", "-7", "-8", "-9"),guess=15000)
+
+crdc
+
+```
+
+
+### Problem 3
+
+### Create new dataframe with following columns
+
+1. The total number of students enrolled at each school
+2.The number of Black students enrolled at each school
+3.The total number of students who received one or more in-school suspension (including non-disabled students and disabled students served by IDEA)
+4.The number of Black students who received one or more in-school suspension (including non-disabled students and disabled students served by IDEA)
+5.The proportion of Black students at each school among all students
+6.The proportion of students who received one or more in-school suspension who are Black among all suspended students
+
+
+```{r}
+crdc_susp <- transmute(crdc,
+                       enr_tot = TOT_ENR_M + TOT_ENR_F,
+                       enr_bl = SCH_ENR_BL_M + SCH_ENR_BL_F,
+                       susp_tot = TOT_DISCWODIS_ISS_M +
+                       TOT_DISCWODIS_ISS_F +
+                       TOT_DISCWDIS_ISS_IDEA_M +
+                       TOT_DISCWDIS_ISS_IDEA_F,
+                       susp_bl = SCH_DISCWODIS_ISS_BL_M +
+                       SCH_DISCWODIS_ISS_BL_F +
+                       SCH_DISCWDIS_ISS_IDEA_BL_M +
+                       SCH_DISCWDIS_ISS_IDEA_BL_F,
+                       pr_bl = enr_bl / enr_tot,
+                       pr_susp_bl = susp_bl / susp_tot)
+
+```
+
+### Plot the proportion of Black students at each school (on the x-axis) versus the proportion of suspended students who are Black (on the y-axis). Include a smoothing line on the plot.
+
+```{r}
+crdc_susp %>%
+  sample_n(10000) %>%
+  ggplot(aes(x=pr_bl, y=pr_susp_bl)) +
+  geom_point(alpha=1/10, size=0.5) +
+  geom_smooth(se=FALSE) +
+  geom_segment(aes(x=0, y=0, xend=1, yend=1), color="red") +
+  coord_fixed(x=c(0,1), y=c(0,1)) +
+  labs(x='% Black students among all students', y='% Black students among suspended students')
+```
+
+### Comments
+
+Optionally, we use coord_fixed to make fixed scale coordinates in which the x- and y-axis have the same length for one unit. This makes it easier to interpret the plot. We also draw a reference line using geom_segment to represent the case when the two proportions are the same.
+If discipline is given fairly without regard to race, then the proportion of Black suspended students among all suspended students should be roughly the same as the proportion of black students in the whole student body, as shown by the reference line. But the former is actually typically greater than the latter, as shown by the fitted smooth line, indicating an over-representation of Black students among suspended students
+
+### Calculate the overall proportion of Black students across all schools and the overall proportion of suspended students who are Black across all schools.
+```{r}
+
+summarise(crdc_susp,pr_bl=sum(enr_bl, na.rm=TRUE) / sum(enr_tot, na.rm=TRUE), pr_susp_bl=sum(susp_bl, na.rm=TRUE) / sum(susp_tot, na.rm=TRUE))
+```
+
+### Are Black students over- or under-represented in in-school suspensions?
+
+Black students tend to be over-represented among suspended students.
+
+### Problem 4 
+
+### Create a new data.frame containing only schools that use corporal punishment with the following columns:
+
+The total number of students enrolled at each school
+The number of disabled students (served by IDEA) at each school
+The total number of students who were disciplined with corporal punishment
+The number of disabled students (served by IDEA) who were disciplined with corporal punishment
+The proportion of disabled students (served by IDEA) at each school among of all students
+The proportion of students who were disciplined with corporal punishment who are disabled (served by IDEA) among all disciplined students
+
+```{r}
+crdc_corp <- filter(crdc, SCH_CORPINSTANCES_IND=="Yes") %>%
+  transmute(
+  enr_tot = TOT_ENR_M + TOT_ENR_F,
+  enr_dis = SCH_ENR_IDEA_M + SCH_ENR_IDEA_F,
+  corp_dis = TOT_DISCWDIS_CORP_IDEA_M +
+  TOT_DISCWDIS_CORP_IDEA_F,
+  corp_tot = corp_dis +
+  TOT_DISCWODIS_CORP_M +
+  TOT_DISCWODIS_CORP_F,
+  pr_dis=enr_dis / enr_tot,
+  pr_corp_dis=corp_dis / corp_tot)
+
+```
+
+### Plot the proportion of disabled students at each school (on the x-axis) versus the proportion of disciplined students who are disabled (on the y-axis). Include a smoothing line on the plot
+
+```{r}
+crdc_corp %>%ggplot(mapping=aes(x=pr_dis, y=pr_corp_dis)) +
+  geom_point(alpha=1/10, size=0.3) +
+  geom_smooth(se=FALSE) +
+  geom_segment(aes(x=0, y=0, xend=1, yend=1), color="red") +
+  coord_fixed(x=c(0,1), y=c(0,1)) +
+  labs(x='% Disabled students among all students', y='% Disabled students among disciplined students')
+```
+
+### What do you observe in the plot? Does the plot indicate an over- or under-representation of disabled students among students who are disciplined with corporeal punishment?
+
+The fitted smooth line suggests that, until the schools reach roughly 25% disabled students, disabled students are over-represented among students who are disciplined with corporal punishment. This is indicated by theproportion of disciplined students who are disabled typically being greater than the proportion of disabled students at the school for pr_dis < 0.25. 
+
+However, this relationship drops off as the proportion of disabled students at the school increases afer this point, suggesting under-representation for schools where pr_dis> 0.25. But the second claim should be taken with a grain of salt, as we have much less data points where pr_dis > 0.25.
+
+### Calculate the overall proportion of disabled students across all schools and the overall proportion of disciplined students who are disabled across all schools.
+
+```{r}
+summarise(crdc_corp,pr_dis=sum(enr_dis, na.rm=TRUE) / sum(enr_tot, na.rm=TRUE),
+pr_corp_dis=sum(corp_dis, na.rm=TRUE) / sum(corp_tot, na.rm=TRUE))
+
+```
+
+### Are disabled students over- or under-represented in corporal punishment?
+
+Overall, disabled students appear to be over-represented among students disciplined with corporal punishment.
+
+### Problem 5
+
+### Create a new data.frame containing only schools with a Gifted & Talented program with the following columns:
+
+The total number of students enrolled at each school
+The number of Black and Hispanic students at each school
+The total number of students in the school’s GT program
+The number of students in the GT program who are Black or Hispanic
+The proportion of students at each school who are Black or Hispanic among all students
+The proportion of students in the GT program who are Black or Hispanic among students in the GT program
+
+```{r}
+crdc_gt <- filter(crdc, SCH_GT_IND=="Yes") %>%
+  transmute(
+  enr_tot = TOT_ENR_M + TOT_ENR_F,
+  enr_hibl = SCH_ENR_HI_M + SCH_ENR_HI_F +
+  SCH_ENR_BL_M + SCH_ENR_BL_F,
+  pr_hibl = enr_hibl / enr_tot,
+  gt_tot = TOT_GTENR_M + TOT_GTENR_F,
+  gt_hibl = SCH_GTENR_HI_M + SCH_GTENR_HI_F +
+  SCH_GTENR_BL_M + SCH_GTENR_BL_F,
+  pr_gt_hibl = gt_hibl / gt_tot)
+
+```
+
+### Plot the proportion of Black and Hispanic students at each school (on the x-axis) versus the proportion of GT students who Black or Hispanic (on the y-axis). Include a smoothing line on the plot.
+
+```{r}
+crdc_gt %>% sample_n(10000) %>%
+  ggplot(aes(x=pr_hibl, y=pr_gt_hibl)) +
+  geom_point(alpha=1/10, size=0.4) +
+  geom_smooth(se=FALSE) +
+  geom_segment(aes(x=0, y=0, xend=1, yend=1), color="red") +
+  coord_fixed(x=c(0,1), y=c(0,1)) +
+  labs(x='% Black & Hisp. students', y='% Black & Hisp. among students in GT program')
+
+```
+
+### What do you observe in the plot? Does the plot indicate an over- or under-representation of Black and Hispanic students in Gifted & Talented programs?
+
+The fitted smooth lines shows that the proportion of Gifted & Talented students who are Black and Hispanic is typically lower than the proportion of Black and Hispanic students at each school. This indicates an under-representation of Black and Hispanic students in Gifted & Talented programs.
+
+### Calculate the overall proportion of Black and Hispanic students across all schools and the overall proportion of GT students who are Black or Hispanic.
+
+```{r}
+
+summarise(crdc_gt,pr_hibl=sum(enr_hibl, na.rm=TRUE) / sum(enr_tot, na.rm=TRUE),
+pr_gt_hibl=sum(gt_hibl, na.rm=TRUE) / sum(gt_tot, na.rm=TRUE))
+```
+
+## Are Black and Hispanic students over- or under-represented in Gifted & Talented programs?
+
+In general, Black and Hispanic students appear to be under-represented in Gifted & Talented programs.
